@@ -1,0 +1,126 @@
+<html>
+    <head>
+        <script type="text/javascript" src="https://copastur.lightning.force.com/support/api/61.0/lightning/opencti.js"></script>
+        <script type="text/javascript">
+
+            // REGISTRANDO EVENTOS AO CARREGAR A PÁGINA
+            window.addEventListener('load', function() {
+                sforce.opencti.enableClickToDial(); // -> HABILITANDO CLICK TO CALL
+                sforce.opencti.onClickToDial({listener: listenerClickToCall});  // -> ADD LISTENER PARA RECEBER EVENTOS DE CLICK TO CALL
+                fetchCurrentUser3cxInfo();
+            });
+            
+            //FUNÇÃO CUSTOM PARA BUSCAR DADOS DO USUÁRIO 3CX
+            const fetchCurrentUser3cxInfo = () => {
+                sforce.opencti.runApex({
+                    apexClass: 'OpenCtiHelper', //-> Valor FIXO
+                    methodName: 'getCurrentUser3cxCredentials', //-> Valor FIXO
+                    callback: (response) => {
+                        if(response.success){
+                            console.log('Retorno 3cx user info:');
+                            console.log(response.returnValue.runApex);
+                            //ex. Retorno JSON -> {"password":"ABC123","user":"Multiedro"}
+                        }
+                        else{
+                            console.error(response.errors[0].description);
+                        }
+                    } 
+                })
+            }
+  
+            // FUNÇÃO PARA EXECUTAR EVENTO DE CLICK TO CALL
+            const listenerClickToCall = function(payload) {
+                console.log('Clicked phone number: ' + payload.number);
+                handleSoftPhoneVisibility(true);
+            };
+
+            const handleSoftPhoneVisibility = (visible) => {
+                sforce.opencti.setSoftphonePanelVisibility({
+                    visible: visible //TRUE ou FALSE
+                    //callback:function  //Optional
+                });
+            }
+
+            const searchPhone = () => {
+                const inputPhone = document.querySelector('#phone');
+                const value = inputPhone.value;
+                if(!value){
+                    alert('Informe o telefone para busca.');
+                    return;
+                };
+                
+                sforce.opencti.searchAndScreenPop({
+                    searchParams: value,
+                    callType: sforce.opencti.CALL_TYPE.INBOUND,
+                    deferred: false,
+                    callback: searchPhoneCallback
+                });
+            };
+
+            const searchPhoneCallback = (response) => {
+                if (response.success) {
+                    /* EX RESPONSE VALUE -> PESQUISANDO PELO TELEFONE
+                        {
+                            "003ak000003AWogAAG": {
+                                "Title": "VP, Technology",
+                                "Id": "003ak000003AWogAAG",
+                                "RecordType": "Contact",
+                                "Phone": "(650) 867-3450",
+                                "Name": "Edna Frank"
+                            },
+                            "001ak00000L4uHyAAJ": {
+                                "Type": "Customer - Channel",
+                                "Id": "001ak00000L4uHyAAJ",
+                                "RecordType": "Account",
+                                "Phone": "(650) 867-3450",
+                                "Name": "GenePoint",
+                                "AccountNumber": "CC978213"
+                            }
+                        }
+                    */
+                   
+                    console.log(JSON.stringify(response.returnValue));
+                    console.log('API method call executed successfully! returnValue:', response.returnValue);
+
+                    //Obtem as chaves do objeto
+                    const objectsKey = Object.keys(response.returnValue);
+
+                    //Verificando se retornou registros para busca realizada
+                    if(objectsKey.length){
+                        /* Pega O primeiro objeto retornado  
+                        Pode implementar uma lógica aqui para priorizar o tipo de objeto a ser exibido em caso de mais um registro encontrado */
+                        const firstObj = response.returnValue[objectsKey[0]];
+                        console.log(JSON.stringify(firstObj));
+
+                        //FUNÇÃO PARE NAVEGAR PARA O REGISTRO
+                        sforce.opencti.screenPop({
+                            type: sforce.opencti.SCREENPOP_TYPE.SOBJECT,
+                            params: {recordId: firstObj.Id},
+                            callback: screenPopCallback
+                        });
+                    }
+                    else{
+                        console.error('Não foi encontrado nenhum resultado para a busca');
+                    }
+                } else { 
+                    console.error('Something went wrong! Errors:', response.errors);
+                }
+            };   
+            
+            const screenPopCallback = (response) => {
+                if (response.success) {
+                    console.log('API method call executed successfully! returnValue:', response.returnValue);
+                } else { 
+                    console.error('Something went wrong! Errors:', response.errors);
+                }
+            }
+        </script>
+    </head>
+
+    <body>
+        <input type="tel" id="phone" name="phone" />
+        <button onclick="searchPhone()">Buscar telefone</button>
+
+        <div class="main-content"></div>
+    </body>
+</html>
